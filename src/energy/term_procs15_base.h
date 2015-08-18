@@ -507,7 +507,7 @@ public:
                this->predicted_chemical_shifts_previous = this->predicted_chemical_shifts;
           }
 
-          print_parameters();
+          //print_parameters();
 
      }
 
@@ -532,7 +532,7 @@ public:
                this->predicted_chemical_shifts = this->predicted_chemical_shifts_previous;
           }
 
-          print_parameters();
+          //print_parameters();
 
      }
 
