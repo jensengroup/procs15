@@ -24,10 +24,10 @@
 #include "array_wrapper.h"
 
 
-using namespace lib_definitions;
 
 namespace phaistos {
 
+using namespace procs15;
 using namespace definitions;
 
 class ProCS15Backend {
@@ -1432,7 +1432,7 @@ public:
      //! Constructor
      ProCS15Backend (phaistos::ChainFB &chain, bool load_ca, bool load_cb, bool load_co, bool load_n, bool load_hn, bool load_ha, std::string procsnumpypath) {
 
-          using namespace lib_definitions;
+          using namespace procs15;
 	 
           std::cout << "Loading ProCS15 data files" << std::endl;
 

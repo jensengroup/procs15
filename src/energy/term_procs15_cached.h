@@ -24,12 +24,11 @@
 #include "procs15_backend.h"
 
 
-using namespace lib_definitions;
 
 namespace phaistos {
+using namespace procs15;
 
-class TermProCS15Cached: public TermProCS15Base<TermProCS15Cached>,
-                           public ProCS15Backend {
+class TermProCS15Cached: public TermProCS15Base<TermProCS15Cached>{
 private:
 
      std::vector<bool> loaded_data;
@@ -1886,8 +1885,7 @@ public:
      TermProCS15Cached(ChainFB *chain,
                   const Settings &settings=Settings(),
                   RandomNumberEngine *random_number_engine = &random_global)
-          : TermProCS15Base(chain, "procs15-cached", settings, random_number_engine),
-          ProCS15Backend(*chain, settings.load_ca, settings.load_cb, settings.load_co, settings.load_n, settings.load_hn, settings.load_ha, settings.procsnumpypath) {
+          : TermProCS15Base(chain, "procs15-cached", settings, random_number_engine) {
 
           using namespace definitions;
 
@@ -1955,7 +1953,6 @@ public:
                   RandomNumberEngine *random_number_engine,
                   int thread_index, ChainFB *chain)
           : TermProCS15Base(other, random_number_engine, thread_index, chain),
-          ProCS15Backend(other, *chain),
           bbdon_bbacc_modified_pairs(other.bbdon_bbacc_modified_pairs),
           ha3don_bbacc_modified_pairs(other.ha3don_bbacc_modified_pairs),
           scdon_bbacc_modified_pairs(other.scdon_bbacc_modified_pairs),
@@ -3187,55 +3184,55 @@ public:
      }
 
 
-     void NMR_STAR_format(phaistos::ChainFB& chain){
-
-          //! print NMR star format
-
-          int atom_count = 1;
-
-          for (unsigned int i = 0; i < chemical_shifts_table.size(); i++){
-               for (unsigned int j = 0; j < 6; j++){
-                    switch (j){
-                         case 0: //!CA
-                              if (loaded_tables[0] == true){
-                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CA" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-                                   atom_count+= 1;
-                              }
-
-                              break;
-                         case 1: //!CB
-                              if (chain[i].residue_type != GLY && loaded_tables[1] == true){
-                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CB" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-                                   atom_count+= 1;
-                              }
-                              break;
-                         case 2: //!C
-                              if (loaded_tables[2] == true){
-                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "C" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-                              }
-                              break;
-                         case 3: //!N
-                              if (loaded_tables[3] == true){
-                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "N" << "\t" << "N" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-                              atom_count+= 1;
-                              }
-                              break;
-                         case 4: //!HN
-                              if (chain[i].residue_type != PRO && loaded_tables[4] == true){
-                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "H" << "\t" << "H" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-                              atom_count+= 1;
-                              }
-                              break;
-                         case 5: //!HA
-                              if (loaded_tables[5] == true){
-                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "HA" << "\t" << "H" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-                              atom_count+= 1;
-                              }
-                              break;
-                    }
-               }
-          }
-     }
+//     void NMR_STAR_format(phaistos::ChainFB& chain){
+//
+//          //! print NMR star format
+//
+//          int atom_count = 1;
+//
+//          for (unsigned int i = 0; i < chemical_shifts_table.size(); i++){
+//               for (unsigned int j = 0; j < 6; j++){
+//                    switch (j){
+//                         case 0: //!CA
+//                              if (loaded_tables[0] == true){
+//                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CA" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
+//                                   atom_count+= 1;
+//                              }
+//
+//                              break;
+//                         case 1: //!CB
+//                              if (chain[i].residue_type != GLY && loaded_tables[1] == true){
+//                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CB" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
+//                                   atom_count+= 1;
+//                              }
+//                              break;
+//                         case 2: //!C
+//                              if (loaded_tables[2] == true){
+//                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "C" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
+//                              }
+//                              break;
+//                         case 3: //!N
+//                              if (loaded_tables[3] == true){
+//                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "N" << "\t" << "N" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
+//                              atom_count+= 1;
+//                              }
+//                              break;
+//                         case 4: //!HN
+//                              if (chain[i].residue_type != PRO && loaded_tables[4] == true){
+//                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "H" << "\t" << "H" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
+//                              atom_count+= 1;
+//                              }
+//                              break;
+//                         case 5: //!HA
+//                              if (loaded_tables[5] == true){
+//                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "HA" << "\t" << "H" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
+//                              atom_count+= 1;
+//                              }
+//                              break;
+//                    }
+//               }
+//          }
+//     }
 
 
 }; // end class TermProCS15Cached
@@ -3287,28 +3284,72 @@ public:
      //! \param cs2_this A matrix containing chemical shifts
      //! \return A vector containing RMSDs
      FPlist calc_rmsds(const FPtable &cs1_this,
-                                    const FPtable &cs2_this) {
+                                    const FPtable &cs2_this) {//, int pro_correction = -2) {
 
           FPlist chi_sq = empty_contribution;
           std::vector<int> n_bins = vector_utils::make_vector(0, 0, 0, 0, 0, 0);
+          double cs1;
+          double cs2;
 
-          for (unsigned int i = 0; i <  std::min(cs1_this.size(), cs2_this.size()); i++) {
-               for (unsigned int j = 0; j < 6; j++) {
+          for (unsigned int j = 0; j < 6; j++) {
+               double this_chi_sq = 0.0;
+               unsigned int n = 0;
+               double xmean = 0.0;
+               double ymean = 0.0;
+               for (unsigned int i=1;i < this->chain->size()-1;i++) {
+                   cs1 = cs2_this[i][j];
+                   cs2 = cs1_this[i][j];
+                   if ((std::abs(cs1) > 0.000001) &&
+                       (std::abs(cs2) > 0.000001)) {
 
-                   if ((std::fabs(cs1_this[i][j]) > 0.0001)
-                    && (std::fabs(cs2_this[i][j]) > 0.0001)) {
-
-                         const FPtype diff  = cs1_this[i][j] - cs2_this[i][j];
-                         chi_sq[j] += diff * diff;
-                         n_bins[j] += 1;
-                    }
+                       xmean += cs1;
+                       ymean += cs2;
+                       n++;
+                   }
                }
+
+               xmean /= (double)n;
+               ymean /= (double)n;
+
+               double b1 = 0.0;
+               double a = 0.0;
+               double b0;
+               for (unsigned int i=1;i < this->chain->size()-1;i++) {
+                   cs1 = cs2_this[i][j];
+                   cs2 = cs1_this[i][j];
+                   if ((std::abs(cs1) > 0.000001) &&
+                       (std::abs(cs2) > 0.000001)) {
+
+                       b1 += (cs1 - xmean) * (cs2 - ymean);
+                       a += (cs1 - xmean) * (cs1 - xmean);
+                   }
+               }
+               b1 /= a;
+               b0 = ymean-b1*xmean;
+               n = 0;
+               for (unsigned int i=1;i < this->chain->size()-1;i++) {
+                   cs1 = cs2_this[i][j];
+                   cs2 = cs1_this[i][j];
+                   if ((std::abs(cs1) > 0.000001) &&
+                       (std::abs(cs2) > 0.000001)) {
+
+               //        if ((pro_correction == -2) || ((*(this->chain))[i].get_neighbour(pro_correction)->residue_type == PRO)) {
+                            this_chi_sq += (cs2-(b0+b1*cs1))*(cs2-(b0+b1*cs1));
+                            n++;
+                 //      }
+                   }
+
+               }
+               chi_sq[j] = this_chi_sq;
+               n_bins[j] = n;
           }
 
           FPlist rmsds = empty_contribution;
 
           for (unsigned int j = 0; j < 6; j++) {
-               rmsds[j] = std::sqrt(chi_sq[j] / n_bins[j]);
+               if (n_bins[j] > 0) {
+                    rmsds[j] = std::sqrt(chi_sq[j] / n_bins[j]);
+               }
           }
 
           return rmsds;
@@ -3348,7 +3389,7 @@ public:
                                  bool register_only=false) {
 
           // Energy to be returned
-          double energy = this->evaluate();
+          //double energy = this->evaluate();
 
           // Calculate new chemical shifts
           this->predicted_chemical_shifts = this->predict(*(this->chain));
@@ -3356,10 +3397,17 @@ public:
           // Calculate RMSDs
           FPlist rmsds = calc_rmsds(this->predicted_chemical_shifts,
                                     this->experimental_chemical_shifts);
+          //FPlist rmsds_pre_pro = calc_rmsds(this->predicted_chemical_shifts,
+          //                          this->experimental_chemical_shifts,-1);
+          //FPlist rmsds_pro = calc_rmsds(this->predicted_chemical_shifts,
+          //                          this->experimental_chemical_shifts,0);
+          //FPlist rmsds_fol_pro = calc_rmsds(this->predicted_chemical_shifts,
+          //                          this->experimental_chemical_shifts,1);
 
           // Output stream
           std::stringstream s;
-          s << std::fixed << std::setprecision(5) << energy << ":" << rmsds;
+          //s << std::fixed << std::setprecision(5) << energy << ":" << rmsds;// << ":" << rmsds_pre_pro << ":" << rmsds_pro << ":" << rmsds_fol_pro;
+          s << std::fixed << std::setprecision(5) << rmsds;// << ":" << rmsds_pre_pro << ":" << rmsds_pro << ":" << rmsds_fol_pro;
 
           // Add full prediction error to output
           if (settings.output_full_prediction_vector) {

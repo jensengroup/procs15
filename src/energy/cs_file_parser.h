@@ -19,7 +19,7 @@
 
 #include "lib_definitions.h"
 
-using namespace lib_definitions;
+using namespace procs15;
 
 namespace cs_parser {
 

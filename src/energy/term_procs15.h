@@ -30,12 +30,11 @@
 #include "procs15_backend.h"
 
 
-using namespace lib_definitions;
+using namespace procs15;
 
 namespace phaistos {
 
-class TermProCS15: public TermProCS15Base<TermProCS15>,
-                   public ProCS15Backend {
+class TermProCS15: public TermProCS15Base<TermProCS15> {
 
 public:
 
@@ -48,16 +47,14 @@ public:
      //!Constructor
      TermProCS15(ChainFB *chain, const Settings &settings=Settings(),
              RandomNumberEngine *random_number_engine = &random_global)
-          : TermProCS15Base(chain, "procs15", settings, random_number_engine),
-            ProCS15Backend(*chain, settings.load_ca, settings.load_cb, settings.load_co, settings.load_n, settings.load_hn, settings.load_ha, settings.procsnumpypath) {
+          : TermProCS15Base(chain, "procs15", settings, random_number_engine) {
      }
 
      //!Copy constructor
      TermProCS15(const TermProCS15 &other,
                  RandomNumberEngine *random_number_engine,
                  int thread_index, ChainFB *chain)
-          : TermProCS15Base(other, random_number_engine, thread_index, chain),
-            ProCS15Backend(other, *chain) {
+          : TermProCS15Base(other, random_number_engine, thread_index, chain) {
 
      }
 
@@ -624,30 +621,30 @@ public:
      }
 
 
-     FPtable get_full_prediction_error(const FPtable &cs1_this, const FPtable &cs2_this) {
-
-          FPlist cs_vector;
-          FPtable prediction_errors(6,cs_vector);
-
-          for (unsigned int i = 0; i <  std::min(cs1_this.size(), cs2_this.size()); i++) {
-               for (unsigned int j = 0; j < 6; j++) {
-
-                   if ((std::fabs(cs1_this[i][j]) > 0.0001)
-                    && (std::fabs(cs2_this[i][j]) > 0.0001)
-                    && !(std::isnan(cs1_this[i][j]))
-                    && !(std::isnan(cs2_this[i][j]))) {
-
-                         const double diff = cs1_this[i][j] - cs2_this[i][j];
-                         prediction_errors[j].push_back(diff);
-                    }
-                   else {
-                       prediction_errors[j].push_back(0.0);
-                   }
-               }
-          }
-
-          return prediction_errors;
-     }
+//     FPtable get_full_prediction_error(const FPtable &cs1_this, const FPtable &cs2_this) {
+//
+//          FPlist cs_vector;
+//          FPtable prediction_errors(6,cs_vector);
+//
+//          for (unsigned int i = 0; i <  std::min(cs1_this.size(), cs2_this.size()); i++) {
+//               for (unsigned int j = 0; j < 6; j++) {
+//
+//                   if ((std::fabs(cs1_this[i][j]) > 0.0001)
+//                    && (std::fabs(cs2_this[i][j]) > 0.0001)
+//                    && !(std::isnan(cs1_this[i][j]))
+//                    && !(std::isnan(cs2_this[i][j]))) {
+//
+//                         const double diff = cs1_this[i][j] - cs2_this[i][j];
+//                         prediction_errors[j].push_back(diff);
+//                    }
+//                   else {
+//                       prediction_errors[j].push_back(0.0);
+//                   }
+//               }
+//          }
+//
+//          return prediction_errors;
+//     }
 
 
      //! Make observation.
@@ -655,26 +652,28 @@ public:
                                  PHAISTOS_LONG_LONG current_iteration=0,
                                  bool register_only=false) {
 
-          // Energy to be returned
-          double energy = this->evaluate();
+          using namespace procs15;
+          this->list_of_tables[4]->get_st(2);
+          //// Energy to be returned
+          //double energy = this->evaluate();
 
-          // Calculate new chemical shifts
-          this->predicted_chemical_shifts = this->predict(*(this->chain));
+//        //  // Calculate new chemical shifts
+//        //  this->predicted_chemical_shifts = this->predict(*(this->chain));
 
-          // Calculate RMSDs
-          FPlist rmsds = calc_rmsds(this->predicted_chemical_shifts,
-                                    this->experimental_chemical_shifts);
+          //// Calculate RMSDs
+          //FPlist rmsds = calc_rmsds(this->predicted_chemical_shifts,
+          //                          this->experimental_chemical_shifts);
 
           // Output stream
           std::stringstream s;
-          s << std::fixed << std::setprecision(5) << energy << ":" << rmsds;
+          //s << std::fixed << std::setprecision(5) << energy << ":" << rmsds;
 
-          // Add full prediction error to output
-          if (settings.output_full_prediction_vector) {
-               FPtable prediction_error = get_full_prediction_error(this->predicted_chemical_shifts,
-                                                                    this->experimental_chemical_shifts);
-               s << ":" << prediction_error;
-          }
+//          // Add full prediction error to output
+//          if (settings.output_full_prediction_vector) {
+//               FPtable prediction_error = get_full_prediction_error(this->predicted_chemical_shifts,
+//                                                                    this->experimental_chemical_shifts);
+//               s << ":" << prediction_error;
+//          }
 
           return s.str();
 

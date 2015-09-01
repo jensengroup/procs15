@@ -27,7 +27,7 @@
 #include <vector>
 #include <boost/assign/list_of.hpp>
 
-namespace lib_definitions {
+namespace procs15 {
 
 
      // Define single precision or double precision,
