@@ -3237,190 +3237,190 @@ public:
 
 }; // end class TermProCS15Cached
 
-//! Observable specialization for TermProCS15Cached
-template <>
-class Observable<TermProCS15Cached>: public TermProCS15Cached, public ObservableBase {
-
-public:
-
-     //! Local settings class.
-     const class Settings: public TermProCS15Cached::Settings, public ObservableBase::Settings {
-     public:
-
-          //! Constructor. Defines default values for settings object.
-          Settings(){}
-
-          //! Output operator
-          friend std::ostream &operator<<(std::ostream &o, const Settings &settings) {
-               o << static_cast<const TermProCS15Cached::Settings>(settings);
-               o << static_cast<const ObservableBase::Settings>(settings);
-               return o;
-          }
-     } settings; //!< Local settings object
-
-     //! Constructor.
-     //! \param energy_term TermCamshift energy term object
-     //! \param settings Local Settings object
-     //! \param reference_energy_function All observables have a pointer to a reference energy function which they can refer to.
-     Observable(const TermProCS15Cached &energy_term,
-                const ObservableBase::Settings &settings=ObservableBase::Settings(),
-                Energy<ChainFB> *reference_energy_function=NULL)
-          : TermProCS15Cached(energy_term),
-            settings(dynamic_cast<const Settings&>(settings)) {
-     }
-
-     //! Copy Constructor.
-     //! \param other Source object from which copy is made
-     //! \param thread_index Index indicating in which thread|rank the copy exists
-     //! \param chain Molecule chain
-     Observable(const Observable &other, int thread_index, ChainFB *chain)
-          : TermProCS15Cached(other, random_number_engine, thread_index, chain),
-            settings(other.settings) {
-     }
-
-
-     //! Chemical shift RMSD between two sets of chemical shifts
-     //! \param cs1_this A matrix containing chemical shifts
-     //! \param cs2_this A matrix containing chemical shifts
-     //! \return A vector containing RMSDs
-     FPlist calc_rmsds(const FPtable &cs1_this,
-                                    const FPtable &cs2_this) {//, int pro_correction = -2) {
-
-          FPlist chi_sq = empty_contribution;
-          std::vector<int> n_bins = vector_utils::make_vector(0, 0, 0, 0, 0, 0);
-          double cs1;
-          double cs2;
-
-          for (unsigned int j = 0; j < 6; j++) {
-               double this_chi_sq = 0.0;
-               unsigned int n = 0;
-               double xmean = 0.0;
-               double ymean = 0.0;
-               for (unsigned int i=1;i < this->chain->size()-1;i++) {
-                   cs1 = cs2_this[i][j];
-                   cs2 = cs1_this[i][j];
-                   if ((std::abs(cs1) > 0.000001) &&
-                       (std::abs(cs2) > 0.000001)) {
-
-                       xmean += cs1;
-                       ymean += cs2;
-                       n++;
-                   }
-               }
-
-               xmean /= (double)n;
-               ymean /= (double)n;
-
-               double b1 = 0.0;
-               double a = 0.0;
-               double b0;
-               for (unsigned int i=1;i < this->chain->size()-1;i++) {
-                   cs1 = cs2_this[i][j];
-                   cs2 = cs1_this[i][j];
-                   if ((std::abs(cs1) > 0.000001) &&
-                       (std::abs(cs2) > 0.000001)) {
-
-                       b1 += (cs1 - xmean) * (cs2 - ymean);
-                       a += (cs1 - xmean) * (cs1 - xmean);
-                   }
-               }
-               b1 /= a;
-               b0 = ymean-b1*xmean;
-               n = 0;
-               for (unsigned int i=1;i < this->chain->size()-1;i++) {
-                   cs1 = cs2_this[i][j];
-                   cs2 = cs1_this[i][j];
-                   if ((std::abs(cs1) > 0.000001) &&
-                       (std::abs(cs2) > 0.000001)) {
-
-               //        if ((pro_correction == -2) || ((*(this->chain))[i].get_neighbour(pro_correction)->residue_type == PRO)) {
-                            this_chi_sq += (cs2-(b0+b1*cs1))*(cs2-(b0+b1*cs1));
-                            n++;
-                 //      }
-                   }
-
-               }
-               chi_sq[j] = this_chi_sq;
-               n_bins[j] = n;
-          }
-
-          FPlist rmsds = empty_contribution;
-
-          for (unsigned int j = 0; j < 6; j++) {
-               if (n_bins[j] > 0) {
-                    rmsds[j] = std::sqrt(chi_sq[j] / n_bins[j]);
-               }
-          }
-
-          return rmsds;
-
-     }
-
-
-     FPtable get_full_prediction_error(const FPtable &cs1_this, const FPtable &cs2_this) {
-
-          FPlist cs_vector;
-          FPtable prediction_errors(6,cs_vector);
-
-          for (unsigned int i = 0; i <  std::min(cs1_this.size(), cs2_this.size()); i++) {
-               for (unsigned int j = 0; j < 6; j++) {
-
-                   if ((std::fabs(cs1_this[i][j]) > 0.0001)
-                    && (std::fabs(cs2_this[i][j]) > 0.0001)
-                    && !(std::isnan(cs1_this[i][j]))
-                    && !(std::isnan(cs2_this[i][j]))) {
-
-                         const double diff = cs1_this[i][j] - cs2_this[i][j];
-                         prediction_errors[j].push_back(diff);
-                    }
-                   else {
-                       prediction_errors[j].push_back(0.0);
-                   }
-               }
-          }
-
-          return prediction_errors;
-     }
-
-
-     //! Make observation.
-     virtual std::string observe(MoveInfo *move_info=NULL,
-                                 PHAISTOS_LONG_LONG current_iteration=0,
-                                 bool register_only=false) {
-
-          // Energy to be returned
-          //double energy = this->evaluate();
-
-          // Calculate new chemical shifts
-          this->predicted_chemical_shifts = this->predict(*(this->chain));
-
-          // Calculate RMSDs
-          FPlist rmsds = calc_rmsds(this->predicted_chemical_shifts,
-                                    this->experimental_chemical_shifts);
-          //FPlist rmsds_pre_pro = calc_rmsds(this->predicted_chemical_shifts,
-          //                          this->experimental_chemical_shifts,-1);
-          //FPlist rmsds_pro = calc_rmsds(this->predicted_chemical_shifts,
-          //                          this->experimental_chemical_shifts,0);
-          //FPlist rmsds_fol_pro = calc_rmsds(this->predicted_chemical_shifts,
-          //                          this->experimental_chemical_shifts,1);
-
-          // Output stream
-          std::stringstream s;
-          //s << std::fixed << std::setprecision(5) << energy << ":" << rmsds;// << ":" << rmsds_pre_pro << ":" << rmsds_pro << ":" << rmsds_fol_pro;
-          s << std::fixed << std::setprecision(5) << rmsds;// << ":" << rmsds_pre_pro << ":" << rmsds_pro << ":" << rmsds_fol_pro;
-
-          // Add full prediction error to output
-          if (settings.output_full_prediction_vector) {
-               FPtable prediction_error = get_full_prediction_error(this->predicted_chemical_shifts,
-                                                                    this->experimental_chemical_shifts);
-               s << ":" << prediction_error;
-          }
-
-          return s.str();
-
-     }
-
-}; // End class Observable
+////! Observable specialization for TermProCS15Cached
+//template <>
+//class Observable<TermProCS15Cached>: public TermProCS15Cached, public ObservableBase {
+//
+//public:
+//
+//     //! Local settings class.
+//     const class Settings: public TermProCS15Cached::Settings, public ObservableBase::Settings {
+//     public:
+//
+//          //! Constructor. Defines default values for settings object.
+//          Settings(){}
+//
+//          //! Output operator
+//          friend std::ostream &operator<<(std::ostream &o, const Settings &settings) {
+//               o << static_cast<const TermProCS15Cached::Settings>(settings);
+//               o << static_cast<const ObservableBase::Settings>(settings);
+//               return o;
+//          }
+//     } settings; //!< Local settings object
+//
+//     //! Constructor.
+//     //! \param energy_term TermCamshift energy term object
+//     //! \param settings Local Settings object
+//     //! \param reference_energy_function All observables have a pointer to a reference energy function which they can refer to.
+//     Observable(const TermProCS15Cached &energy_term,
+//                const ObservableBase::Settings &settings=ObservableBase::Settings(),
+//                Energy<ChainFB> *reference_energy_function=NULL)
+//          : TermProCS15Cached(energy_term),
+//            settings(dynamic_cast<const Settings&>(settings)) {
+//     }
+//
+//     //! Copy Constructor.
+//     //! \param other Source object from which copy is made
+//     //! \param thread_index Index indicating in which thread|rank the copy exists
+//     //! \param chain Molecule chain
+//     Observable(const Observable &other, int thread_index, ChainFB *chain)
+//          : TermProCS15Cached(other, random_number_engine, thread_index, chain),
+//            settings(other.settings) {
+//     }
+//
+//
+//     //! Chemical shift RMSD between two sets of chemical shifts
+//     //! \param cs1_this A matrix containing chemical shifts
+//     //! \param cs2_this A matrix containing chemical shifts
+//     //! \return A vector containing RMSDs
+//     FPlist calc_rmsds(const FPtable &cs1_this,
+//                                    const FPtable &cs2_this) {//, int pro_correction = -2) {
+//
+//          FPlist chi_sq = empty_contribution;
+//          std::vector<int> n_bins = vector_utils::make_vector(0, 0, 0, 0, 0, 0);
+//          double cs1;
+//          double cs2;
+//
+//          for (unsigned int j = 0; j < 6; j++) {
+//               double this_chi_sq = 0.0;
+//               unsigned int n = 0;
+//               double xmean = 0.0;
+//               double ymean = 0.0;
+//               for (unsigned int i=1;i < this->chain->size()-1;i++) {
+//                   cs1 = cs2_this[i][j];
+//                   cs2 = cs1_this[i][j];
+//                   if ((std::abs(cs1) > 0.000001) &&
+//                       (std::abs(cs2) > 0.000001)) {
+//
+//                       xmean += cs1;
+//                       ymean += cs2;
+//                       n++;
+//                   }
+//               }
+//
+//               xmean /= (double)n;
+//               ymean /= (double)n;
+//
+//               double b1 = 0.0;
+//               double a = 0.0;
+//               double b0;
+//               for (unsigned int i=1;i < this->chain->size()-1;i++) {
+//                   cs1 = cs2_this[i][j];
+//                   cs2 = cs1_this[i][j];
+//                   if ((std::abs(cs1) > 0.000001) &&
+//                       (std::abs(cs2) > 0.000001)) {
+//
+//                       b1 += (cs1 - xmean) * (cs2 - ymean);
+//                       a += (cs1 - xmean) * (cs1 - xmean);
+//                   }
+//               }
+//               b1 /= a;
+//               b0 = ymean-b1*xmean;
+//               n = 0;
+//               for (unsigned int i=1;i < this->chain->size()-1;i++) {
+//                   cs1 = cs2_this[i][j];
+//                   cs2 = cs1_this[i][j];
+//                   if ((std::abs(cs1) > 0.000001) &&
+//                       (std::abs(cs2) > 0.000001)) {
+//
+//               //        if ((pro_correction == -2) || ((*(this->chain))[i].get_neighbour(pro_correction)->residue_type == PRO)) {
+//                            this_chi_sq += (cs2-(b0+b1*cs1))*(cs2-(b0+b1*cs1));
+//                            n++;
+//                 //      }
+//                   }
+//
+//               }
+//               chi_sq[j] = this_chi_sq;
+//               n_bins[j] = n;
+//          }
+//
+//          FPlist rmsds = empty_contribution;
+//
+//          for (unsigned int j = 0; j < 6; j++) {
+//               if (n_bins[j] > 0) {
+//                    rmsds[j] = std::sqrt(chi_sq[j] / n_bins[j]);
+//               }
+//          }
+//
+//          return rmsds;
+//
+//     }
+//
+//
+//     FPtable get_full_prediction_error(const FPtable &cs1_this, const FPtable &cs2_this) {
+//
+//          FPlist cs_vector;
+//          FPtable prediction_errors(6,cs_vector);
+//
+//          for (unsigned int i = 0; i <  std::min(cs1_this.size(), cs2_this.size()); i++) {
+//               for (unsigned int j = 0; j < 6; j++) {
+//
+//                   if ((std::fabs(cs1_this[i][j]) > 0.0001)
+//                    && (std::fabs(cs2_this[i][j]) > 0.0001)
+//                    && !(std::isnan(cs1_this[i][j]))
+//                    && !(std::isnan(cs2_this[i][j]))) {
+//
+//                         const double diff = cs1_this[i][j] - cs2_this[i][j];
+//                         prediction_errors[j].push_back(diff);
+//                    }
+//                   else {
+//                       prediction_errors[j].push_back(0.0);
+//                   }
+//               }
+//          }
+//
+//          return prediction_errors;
+//     }
+//
+//
+//     //! Make observation.
+//     virtual std::string observe(MoveInfo *move_info=NULL,
+//                                 PHAISTOS_LONG_LONG current_iteration=0,
+//                                 bool register_only=false) {
+//
+//          // Energy to be returned
+//          //double energy = this->evaluate();
+//
+//          // Calculate new chemical shifts
+//          this->predicted_chemical_shifts = this->predict(*(this->chain));
+//
+//          // Calculate RMSDs
+//          FPlist rmsds = calc_rmsds(this->predicted_chemical_shifts,
+//                                    this->experimental_chemical_shifts);
+//          //FPlist rmsds_pre_pro = calc_rmsds(this->predicted_chemical_shifts,
+//          //                          this->experimental_chemical_shifts,-1);
+//          //FPlist rmsds_pro = calc_rmsds(this->predicted_chemical_shifts,
+//          //                          this->experimental_chemical_shifts,0);
+//          //FPlist rmsds_fol_pro = calc_rmsds(this->predicted_chemical_shifts,
+//          //                          this->experimental_chemical_shifts,1);
+//
+//          // Output stream
+//          std::stringstream s;
+//          //s << std::fixed << std::setprecision(5) << energy << ":" << rmsds;// << ":" << rmsds_pre_pro << ":" << rmsds_pro << ":" << rmsds_fol_pro;
+//          s << std::fixed << std::setprecision(5) << rmsds;// << ":" << rmsds_pre_pro << ":" << rmsds_pro << ":" << rmsds_fol_pro;
+//
+//          // Add full prediction error to output
+//          if (settings.output_full_prediction_vector) {
+//               FPtable prediction_error = get_full_prediction_error(this->predicted_chemical_shifts,
+//                                                                    this->experimental_chemical_shifts);
+//               s << ":" << prediction_error;
+//          }
+//
+//          return s.str();
+//
+//     }
+//
+//}; // End class Observable
 
 } // end namespace phaistos
 

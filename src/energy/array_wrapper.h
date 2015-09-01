@@ -335,7 +335,6 @@ class ArrayWrapperInterpolate:public ArrayWrapper{
 	       return  a;
           }
           FPtype get_st(int i){         
-               std::cout << "lal" << (numpy(+360-120)) << " " << numpy(140) << std::endl;
                return (FPtype)threed_array[i][3][16];
 	  }
 	  FPtype interpolate4d(int i, FPtype x, FPtype y, FPtype z, FPtype t, int phi, int psi, int grid[][2]){
