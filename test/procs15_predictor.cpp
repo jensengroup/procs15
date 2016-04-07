@@ -1,5 +1,5 @@
-// test_camshift.cpp --- Test of camshift energy class
-// Copyright (C) 2011 Anders Steen Christensen
+// procs15_predictor.cpp --- Generates BMRB star file from input pdb-files
+// Copyright (C) 2016 Anders Steen Christensen, Anders S. Larsen, Lars Andersen Bratholm
 //
 // This file is part of Phaistos
 //
@@ -50,8 +50,8 @@ void run_predictor(std::vector< std::string > &pdbfiles, TermProCS15::Settings &
      ofstream  myfile;
      myfile.open ("temp.str", ios::out);
      for (unsigned int i = 0; i < chain.size(); i++){
-          myfile << (i+1) << " " << (i+1) << " " << chain[i].residue_type << " " << "CA" << " " << "C" << " " << "56.0" << "\n";          
-          }
+          myfile << (i+1) << " " << (i+1) << " " << chain[i].residue_type << " " << "CA" << " " << "C" << " " << "56.0" << "\n";
+     }
 
      myfile.close();
 
@@ -66,13 +66,19 @@ void run_predictor(std::vector< std::string > &pdbfiles, TermProCS15::Settings &
           chain_loop.add_atoms(definitions::ALL_PHYSICAL_ATOMS);
 
           //change extension for predictions
-          int lastindex = (*pdb).find_last_of("."); 
-          std::string rawname = (*pdb).substr(0, lastindex);
+          int lastindex_dot = (*pdb).find_last_of(".");
+          std::string rawname = (*pdb).substr(0, lastindex_dot);
           std::string filename = rawname + ".procs";
 
-          FPtable prediction = (*procs15).predict(chain_loop);
-          (*procs15).write_nmr_star_format(chain_loop,filename, prediction);
+          if (!(settings.debug)) {
+               FPtable prediction = (*procs15).predict(chain_loop);
+               (*procs15).write_nmr_star_format(chain_loop,filename, prediction);
+          } else {
+               std::vector<FPtable> prediction = (*procs15).predict_full(chain_loop);
+               (*procs15).write_nmr_star_format_full(chain_loop,filename, prediction);
+          }
      }
+     remove("temp.str");
 }
 
 // Parse the command line
@@ -92,141 +98,33 @@ void get_command_line(int &argc, char *argv[],
                continue;
           }
 
-          if (arg_name == std::string("load-CA-Chemical-shifts")) {
+          if (arg_name == std::string("load-ca")) {
                i++;
                settings.load_ca = (bool)atoi(argv[i]);
           }
-          else if (arg_name == std::string("load-CB-Chemical-shifts")) {
+          else if (arg_name == std::string("load-cb")) {
                i++;
                settings.load_cb = (bool)atoi(argv[i]);
           }
-          else if (arg_name == std::string("load-CO-Chemical-shifts")) {
+          else if (arg_name == std::string("load-co")) {
                i++;
                settings.load_co = (bool)atoi(argv[i]);
           }
-          else if (arg_name == std::string("load-N-Chemical-shifts")) {
+          else if (arg_name == std::string("load-n")) {
                i++;
                settings.load_n = (bool)atoi(argv[i]);
           }
-          else if (arg_name == std::string("load-HN-Chemical-shifts")) {
+          else if (arg_name == std::string("load-h")) {
                i++;
                settings.load_hn = (bool)atoi(argv[i]);
           }
-          else if (arg_name == std::string("load-HA-Chemical-shifts")) {
+          else if (arg_name == std::string("load-ha")) {
                i++;
                settings.load_ha = (bool)atoi(argv[i]);
           }
-          else if (arg_name == std::string("include-ha-rc")) {
+          else if (arg_name == std::string("details")) {
                i++;
-               settings.include_ha_rc = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-hn-rc")) {
-               i++;
-               settings.include_hn_rc = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-hn-previous")) {
-               i++;
-               settings.include_hn_previous_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ha-previous")) {
-               i++;
-               settings.include_ha_previous_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ca-previous")) {
-               i++;
-               settings.include_ca_previous_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-cb-previous")) {
-               i++;
-               settings.include_cb_previous_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-co-previous")) {
-               i++;
-               settings.include_co_previous_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-hn-following")) {
-               i++;
-               settings.include_hn_following_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ha-following")) {
-               i++;
-               settings.include_ha_following_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ca-following")) {
-               i++;
-               settings.include_ca_following_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-cb-following")) {
-               i++;
-               settings.include_cb_following_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-co-following")) {
-               i++;
-               settings.include_co_following_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-n-following")) {
-               i++;
-               settings.include_n_following_residue_correction = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ha-primary-hn-hbond")) {
-               i++;
-               settings.include_ha_primary_hn_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ca-primary-hn-hbond")) {
-               i++;
-               settings.include_ca_primary_hn_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-co-primary-hn-hbond")) {
-               i++;
-               settings.include_co_primary_hn_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-n-primary-hn-hbond")) {
-               i++;
-               settings.include_n_primary_hn_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-hn-primary-ha-hbond")) {
-               i++;
-               settings.include_hn_primary_ha_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-co-primary-ha-hbond")) {
-               i++;
-               settings.include_co_primary_ha_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-hn-secondary-hn-hbond")) {
-               i++;
-               settings.include_hn_secondary_hn_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ha-secondary-hn-hbond")) {
-               i++;
-               settings.include_ha_secondary_hn_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ca-secondary-hn-hbond")) {
-               i++;
-               settings.include_ca_secondary_hn_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-hn-secondary-ha-hbond")) {
-               i++;
-               settings.include_hn_secondary_ha_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ha-secondary-ha-hbond")) {
-               i++;
-               settings.include_ha_secondary_ha_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-ca-secondary-ha-hbond")) {
-               i++;
-               settings.include_ca_secondary_ha_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-co-secondary-ha-hbond")) {
-               i++;
-               settings.include_co_secondary_ha_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("include-n-secondary-ha-hbond")) {
-               i++;
-               settings.include_n_secondary_ha_hbond = (bool)atoi(argv[i]);
-          }
-          else if (arg_name == std::string("HN-water-bond-correction")) {
-               i++;
-               settings.use_water_correction = (bool)atoi(argv[i]);
+               settings.debug = (bool)atoi(argv[i]);
           }
           else if (arg_name == std::string("data-folder")) {
                i++;
@@ -245,14 +143,15 @@ void get_command_line(int &argc, char *argv[],
 
 int main(int argc, char *argv[]) {
 
-     if (argc < 1) {
-         std::cerr << "Usage: ./procs15_predictor < --setting=value > --pdb-files file1.pdb file2.pdb"
-                   << "\n(fileX.pdb is PDB structure to predict) (<location of data files> path to numpy datafiles) (<setting=value> is procs15 settings, e.g. --include-ha-rc 0)  "
+     if (argc < 2) {
+         std::cerr << "Usage: ./procs15_predictor --data-folder <path to numpy datafiles> --pdb-files file1.pdb file2.pdb ..."
+                   << "\nfileX.pdb is PDB structures to predict. Prediction of an atom type can by disabled by"
+                   << " including \n--load-Y 0, \nwhere Y can be (ha, ca, cb, co, h, n)"
+                   << "\nDetailed output can be printed with --details 1"
                    << "\nMemory usage for predictions with all atom types is approximately 29 GB of RAM." << std::endl;
           exit(1);
      }
 
-     std::string numpy_path = argv[1];
      std::vector< std::string > pdbfiles;
      TermProCS15::Settings settings;
 

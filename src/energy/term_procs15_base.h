@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 by Anders S. Christensen, Anders S. Larsen, Lars A. Bratholm
+// Copyright (C) 2014-2014 by Anders S. Christensen, Anders S. Larsen, Lars A. Bratholm
 //
 // This file is part of PHAISTOS
 //
@@ -31,6 +31,7 @@
 #include "cs_file_parser.h"
 #include<boost/range/numeric.hpp>
 #include <iomanip>
+#include <stdlib.h>
 
 #include "procs15_backend.h"
 
@@ -108,9 +109,6 @@ public:
          bool include_co_secondary_ha_hbond;
          bool  include_n_secondary_ha_hbond;
 
-
-         bool output_full_prediction_vector;
-
          //! Add correction to amide proton chemical shifts when not forming hydrogen bond.
          bool use_water_correction;
 
@@ -165,7 +163,6 @@ public:
                   bool include_cb_secondary_ha_hbond = false,
                   bool include_co_secondary_ha_hbond = true,
                   bool  include_n_secondary_ha_hbond = true,
-                  bool output_full_prediction_vector = false,
                   bool use_water_correction = true,
                   std::string procsnumpypath = "./" )
               : star_filename(star_filename),
@@ -214,7 +211,6 @@ public:
               include_cb_secondary_ha_hbond(include_cb_secondary_ha_hbond),
               include_co_secondary_ha_hbond(include_co_secondary_ha_hbond),
                include_n_secondary_ha_hbond( include_n_secondary_ha_hbond),
-                output_full_prediction_vector(output_full_prediction_vector),
                 use_water_correction(use_water_correction),
                 procsnumpypath(procsnumpypath){}
 
@@ -267,6 +263,15 @@ public:
      //! Local copy of thread id.
      int thread_id;
 
+     //! Ringcurrent cutoff distance
+     double rc_cutoff;
+
+     //! HA hbond distance (max 4)
+     double ha_hbond_cutoff;
+
+     //! HN hbond distance (max 4)
+     double hn_hbond_cutoff;
+
      //! Returns samples according to the Normal distribution.·
      //! \param m Mean value.
      //! \param std standard deviation
@@ -311,18 +316,24 @@ public:
 
           // HA, CA, H, N, C, CB (twice in case of mixture model)
           this->weights_previous = 
-          this->weights = vector_utils::make_vector<FPtype>(0.40, 1.65, 0.60, 4.15, 1.70, 2.00, 0.20, 0.80, 0.30, 2.00, 0.90, 1.00);
+          this->weights = vector_utils::make_vector<FPtype>(0.36, 1.83, 0.61, 3.78, 1.66, 1.97, 0.20, 0.80, 0.30, 2.00, 0.90, 1.00);
 
           this->slopes_previous = 
-          this->slopes = vector_utils::make_vector<FPtype>(1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+          this->slopes = vector_utils::make_vector<FPtype>(0.467, 1.02, 0.154, 0.463, 0.385, 0.939);
 
           this->intercepts_previous = 
           this->intercepts = vector_utils::make_vector<FPtype>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
+          // When slopes and intercepts are fixed, the energy term is parametrised slightly different:
+          if ((settings.energy_type == "fix-slope-intercept") || (settings.energy_type == "fix-all")) {
+               this->intercepts_previous = 
+               this->intercepts = vector_utils::make_vector<FPtype>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+          }
+
           //! Read-in chemical shifts and store in this table.
           this->experimental_chemical_shifts = cs_parser::value_matrix_from_starfile(settings.star_filename, *chain);
 
-          this->n_print = 10000;
+          this->n_print = 100000;
 
           if (settings.energy_type == "mixture") {
                for (unsigned int i=0; i < this->chain->size(); i++) {
@@ -351,6 +362,9 @@ public:
                }
           }
 
+          rc_cutoff = 8;
+          ha_hbond_cutoff = 4;
+          hn_hbond_cutoff = 3;
 
      }
 
@@ -373,6 +387,9 @@ public:
             experimental_chemical_shifts(other.experimental_chemical_shifts),
             predicted_chemical_shifts(other.predicted_chemical_shifts),
             predicted_chemical_shifts_previous(other.predicted_chemical_shifts_previous),
+            rc_cutoff(other.rc_cutoff),
+            ha_hbond_cutoff(other.ha_hbond_cutoff),
+            hn_hbond_cutoff(other.hn_hbond_cutoff),
             member(other.member),
             member_previous(other.member_previous) {
 
@@ -393,8 +410,8 @@ public:
                double xsum = 0.0;
                double ysum = 0.0;
                double xysum = 0.0;
-               double xsum2 = 0.0;
-               double ysum2 = 0.0;
+               double x2sum = 0.0;
+               double y2sum = 0.0;
                for (unsigned int i=1;i < this->chain->size()-1;i++) {
                    cs1 = predicted_cs[i][j];
                    cs2 = experimental_cs[i][j];
@@ -404,88 +421,20 @@ public:
                        xsum += cs1;
                        ysum += cs2;
                        xysum += cs1*cs2;
-                       xsum2 += cs1*cs1;
-                       ysum2 += cs2*cs2;
+                       x2sum += cs1*cs1;
+                       y2sum += cs2*cs2;
                        n++;
                    }
                }
 
                if (n > 0) {
-                    double chi_sq = ysum2 + ( xysum * (2*xsum * ysum - n* xysum) - xsum2 * ysum * ysum ) / (n * xsum2 - xsum*xsum);
+                    double chi_sq = y2sum + ( xysum * (2*xsum * ysum - n* xysum) - x2sum * ysum * ysum ) / (n * x2sum - xsum*xsum);
                     energy += 0.5*(n+1)*std::log(chi_sq);
                }
           }
           return energy;
      }
 
-//     double get_normal_mle_slope_mle_intercept_marg_sigma(FPtable &predicted_cs, FPtable &experimental_cs) {
-//          double energy = 0.0;
-//          double cs1;
-//          double cs2;
-//          for (unsigned int j=0; j < 6; j++) {
-//               unsigned int n = 0;
-//               double xsum = 0.0;
-//               double ysum = 0.0;
-//               double xysum = 0.0;
-//               double xsum2 = 0.0;
-//               double ysum2 = 0.0;
-//               for (unsigned int i=1;i < this->chain->size()-1;i++) {
-//                   cs1 = predicted_cs[i][j];
-//                   cs2 = experimental_cs[i][j];
-//                   if ((std::abs(cs1) > 0.000001) &&
-//                       (std::abs(cs2) > 0.000001)) {
-//
-//                       xsum += cs1;
-//                       ysum += cs2;
-//                       xysum += cs1*cs2;
-//                       xsum2 += cs1*cs1;
-//                       ysum2 += cs2*cs2;
-//                       n++;
-//                   }
-//               }
-//
-//               if (n > 0) {
-//                    double chi_sq = ysum2 + ( xysum * (2*xsum * ysum - n* xysum) - xsum2 * ysum * ysum ) / (n * xsum2 - xsum*xsum);
-//                    energy += 0.5*n*std::log(chi_sq);
-//               }
-//          }
-//          return energy;
-//     }
-
-
-//     double get_normal_mle_slope_mle_intercept_samp_sigma(FPtable &predicted_cs, FPtable &experimental_cs) {
-//          double energy = 0.0;
-//          double cs1;
-//          double cs2;
-//          for (unsigned int j=0; j < 6; j++) {
-//               unsigned int n = 0;
-//               double xsum = 0.0;
-//               double ysum = 0.0;
-//               double xysum = 0.0;
-//               double xsum2 = 0.0;
-//               double ysum2 = 0.0;
-//               for (unsigned int i=1;i < this->chain->size()-1;i++) {
-//                   cs1 = predicted_cs[i][j];
-//                   cs2 = experimental_cs[i][j];
-//                   if ((std::abs(cs1) > 0.000001) &&
-//                       (std::abs(cs2) > 0.000001)) {
-//
-//                       xsum += cs1;
-//                       ysum += cs2;
-//                       xysum += cs1*cs2;
-//                       xsum2 += cs1*cs1;
-//                       ysum2 += cs2*cs2;
-//                       n++;
-//                   }
-//               }
-//
-//               if (n > 0) {
-//                    double chi_sq = ysum2 + ( xysum * (2*xsum * ysum - n* xysum) - xsum2 * ysum * ysum ) / (n * xsum2 - xsum*xsum);
-//                    energy += (n+1)*std::log(sigma) + 0.5*chi_sq/(this->weights[j]*this->weights[j]);
-//               }
-//          }
-//          return energy;
-//     }
 
      double get_normal_marg_slope_marg_intercept_sampled_sigma(FPtable &predicted_cs, FPtable &experimental_cs) {
           double energy = 0.0;
@@ -496,8 +445,8 @@ public:
                double xsum = 0.0;
                double ysum = 0.0;
                double xysum = 0.0;
-               double xsum2 = 0.0;
-               double ysum2 = 0.0;
+               double x2sum = 0.0;
+               double y2sum = 0.0;
                for (unsigned int i=1;i < this->chain->size()-1;i++) {
                    cs1 = predicted_cs[i][j];
                    cs2 = experimental_cs[i][j];
@@ -507,16 +456,21 @@ public:
                        xsum += cs1;
                        ysum += cs2;
                        xysum += cs1*cs2;
-                       xsum2 += cs1*cs1;
-                       ysum2 += cs2*cs2;
+                       x2sum += cs1*cs1;
+                       y2sum += cs2*cs2;
                        n++;
                    }
                }
 
                if (n > 0) {
-                    double chi_sq = ysum2 + ( xysum * (2*xsum * ysum - n* xysum) - xsum2 * ysum * ysum ) / (n * xsum2 - xsum*xsum);
-                    energy += (n-1)*std::log(this->weights[j]) + 0.5 * std::log(n * xsum2 - xsum*xsum)
+                    // update the slopes vector with the maximum likelihood estimates
+                    // Note that the slopes are still marginalized in the energy
+                    this->slopes[j] = (n * xysum - xsum * ysum) / (n * x2sum - xsum*xsum);
+                    double chi_sq = (n * y2sum - ysum * ysum - this->slopes[j] * (n * xysum - xsum * ysum)) / n;
+                    energy += (n-1)*std::log(this->weights[j]) + 0.5 * std::log(n * x2sum - xsum*xsum)
                            + 0.5*chi_sq/(this->weights[j]*this->weights[j]);
+                    // noninformative prior slope and offset
+                    energy += 1.5 * std::log(this->slopes[j]*this->slopes[j] + 1);
                }
           }
           return energy;
@@ -591,68 +545,6 @@ public:
           return energy;
      }
 
-     double get_normal_mixture(FPtable &predicted_cs, FPtable &experimental_cs) {
-          double energy = 0.0;
-          double cs1;
-          double cs2;
-          for (unsigned int j=0; j < 6; j++) {
-               unsigned int n_first = 0;
-               double xsum_first = 0.0;
-               double ysum_first = 0.0;
-               double xysum_first = 0.0;
-               double xsum2_first = 0.0;
-               double ysum2_first = 0.0;
-               unsigned int n_second = 0;
-               double xsum_second = 0.0;
-               double ysum_second = 0.0;
-               double xysum_second = 0.0;
-               double xsum2_second = 0.0;
-               double ysum2_second = 0.0;
-               for (unsigned int i=1;i < this->chain->size()-1;i++) {
-                   cs1 = predicted_cs[i][j];
-                   cs2 = experimental_cs[i][j];
-                   if ((std::abs(cs1) > 0.000001) &&
-                       (std::abs(cs2) > 0.000001)) {
-
-                       if (this->member[i]) {
-                            xsum_first += cs1;
-                            ysum_first += cs2;
-                            xysum_first += cs1*cs2;
-                            xsum2_first += cs1*cs1;
-                            ysum2_first += cs2*cs2;
-                            n_first++;
-                       }
-                       else {
-                            xsum_second += cs1;
-                            ysum_second += cs2;
-                            xysum_second += cs1*cs2;
-                            xsum2_second += cs1*cs1;
-                            ysum2_second += cs2*cs2;
-                            n_second++;
-                       }
-                   }
-               }
-
-               if (n_first > 0) {
-                    // the intercept is sampled as the deviation from the MLE intercept, to reduce the correlation between slope and intercept.
-                    double chi_sq = n_first*this->intercepts[j]*this->intercepts[j] + this->slopes[j]*this->slopes[j]*(xsum2_first-xsum_first*xsum_first/n_first) + 2*this->slopes[j] * (xsum_first*ysum_first/n_first-xysum_first) + ysum2_first - ysum_first*ysum_first/n_first;
-                    energy += (n_first+1)*std::log(this->weights[j]) + 1.5*std::log(1+this->slopes[j]*this->slopes[j]) + 0.5*chi_sq/(this->weights[j]*this->weights[j]);
-                    // prior
-                    energy += - std::log(n_first);
-               }
-               if (n_second > 0) {
-                    // the intercept is sampled as the deviation from the MLE intercept, to reduce the correlation between slope and intercept.
-                    double chi_sq = n_second*this->intercepts[j]*this->intercepts[j] + this->slopes[j]*this->slopes[j]*(xsum2_second-xsum_second*xsum_second/n_second) + 2*this->slopes[j] * (xsum_second*ysum_second/n_second-xysum_second) + ysum2_second - ysum_second*ysum_second/n_second;
-                    // the variance of the second mixture for atom j is modelled as weights[j]**2 + weights[j+6]**2.
-                    // Using linear instead of jeffreys prior on variance.
-                    energy += 0.5 * n_second*std::log(this->weights[j]*this->weights[j] + this->weights[j+6]*this->weights[j+6])
-                           + 1.5*std::log(1+this->slopes[j]*this->slopes[j])
-                           + 0.5*chi_sq/(this->weights[j]*this->weights[j] + this->weights[j+6]*this->weights[j+6]);
-               }
-          }
-          return energy;
-     }
-
      double get_normal_sampled_slope_marg_intercept_sampled_sigma(FPtable &predicted_cs, FPtable &experimental_cs) {
           double energy = 0.0;
           double cs1;
@@ -662,8 +554,8 @@ public:
                double xsum = 0.0;
                double ysum = 0.0;
                double xysum = 0.0;
-               double xsum2 = 0.0;
-               double ysum2 = 0.0;
+               double x2sum = 0.0;
+               double y2sum = 0.0;
                for (unsigned int i=1;i < this->chain->size()-1;i++) {
                    cs1 = predicted_cs[i][j];
                    cs2 = experimental_cs[i][j];
@@ -673,28 +565,98 @@ public:
                        xsum += cs1;
                        ysum += cs2;
                        xysum += cs1*cs2;
-                       xsum2 += cs1*cs1;
-                       ysum2 += cs2*cs2;
+                       x2sum += cs1*cs1;
+                       y2sum += cs2*cs2;
                        n++;
                    }
                }
 
                if (n > 0) {
-                    double chi_sq = this->slopes[j]*this->slopes[j]*(xsum2-xsum*xsum/n) + 2*this->slopes[j] * (xsum*ysum/n-xysum) + ysum2 - ysum*ysum/n;
+                    double chi_sq = this->slopes[j]*this->slopes[j]*(x2sum-xsum*xsum/n) + 2*this->slopes[j] * (xsum*ysum/n-xysum) + y2sum - ysum*ysum/n;
                     energy += n*std::log(this->weights[j]) + 1.5*std::log(1+this->slopes[j]*this->slopes[j]) + 0.5*chi_sq/(this->weights[j]*this->weights[j]);
                }
           }
           return energy;
      }
 
+     double get_jeffreys_prior_sigma(FPtable &predicted_cs, FPtable &experimental_cs) {
+          double energy = 0.0;
+          double cs1;
+          double cs2;
+          for (unsigned int j = 0; j < 6; j++) {
+               // check that at least one prediction and experimental value exist for given type
+               // could be done in a prettier fashion
+               for (unsigned int i=1;i < this->chain->size()-1;i++) {
+                   cs1 = predicted_cs[i][j];
+                   cs2 = experimental_cs[i][j];
+                   if ((std::abs(cs1) > 0.000001) &&
+                       (std::abs(cs2) > 0.000001)) {
+                       energy += std::log(this->weights[j]);
+                       break;
+                   }
+               }
+          }
+          return energy;
+     }
+
+     // beta prime prior on sigma^2. Using the transformation p(sigma) = p(sigma^2)*2*sigma
+     double get_beta_prime_prior_sigma() {
+          double energy = 0.0;
+          // alpha and beta fitted from vasco dataset, removing gross outliers.
+          std::vector<double> alphas = vector_utils::make_vector<double>(9.48, 38.3, 12.8, 188., 72.5, 59.6);
+          std::vector<double> betas =  vector_utils::make_vector<double>(69.9, 11.7, 34.8, 13.8, 27.3, 15.8);
+          for (unsigned int i = 0; i < 6; i++) {
+               double sigma2 = this->weights[i] * this->weights[i];
+               energy += (0.5 - alphas[i]) * std::log(sigma2) + (alphas[i] + betas[i]) * std::log(1+sigma2);
+          }
+          return energy;
+     }
+
+     // lognormal prior on sigma. 95% confidence interval between shiftx2 values and values from charmm minimized structures
+     double get_lognormal_prior_sigma() {
+          double energy = 0.0;
+          std::vector<double> mus = vector_utils::make_vector<double>(-1.104,0.184,-0.714,1.146,0.172,0.347);
+          //std::vector<double> sigmas =  vector_utils::make_vector<double>(0.0956,0.177,0.103,0.160,0.183,0.177); //95%
+          std::vector<double> sigmas =  vector_utils::make_vector<double>(0.0727,0.135,0.0787,0.121,0.139,0.135);
+          for (unsigned int i = 0; i < 6; i++) {
+               energy += 0.5 * (std::log(sigmas[i]) - mus[i]) * (std::log(sigmas[i]) - mus[i]) / (this->weights[i] * this->weights[i])
+                       + std::log(this->weights[i]);
+          }
+          return energy;
+     }
+
+     // normal prior on the slope
+     double get_normal_prior_slope() {
+          double energy = 0.0;
+          // slopes fitted from vasco dataset, removing gross outliers.
+          std::vector<double> mus = vector_utils::make_vector<double>(0.457, 1.02, 0.170, 0.453, 0.379, 0.939);
+          std::vector<double> sigmas = vector_utils::make_vector<double>(0.119, 0.065, 0.107, 0.104, 0.124, 0.019);
+          for (unsigned int i = 0; i < 6; i++) {
+               energy += 0.5 * (slopes[i] - mus[i]) * (slopes[i] - mus[i]) / (sigmas[i]*sigmas[i]);
+          }
+          return energy;
+     }
 
      double get_energy(FPtable &predicted_cs, FPtable &experimental_cs) {
-          if (settings.energy_type == "marginalized") return get_normal_marg_slope_marg_intercept_marg_sigma(predicted_cs, experimental_cs);
+          if (settings.energy_type == "marginalized") {
+               double energy = get_normal_marg_slope_marg_intercept_marg_sigma(predicted_cs, experimental_cs);
+          }
           if (settings.energy_type == "mle") return get_normal_mle_slope_mle_intercept_mle_sigma(predicted_cs, experimental_cs);
-          if (settings.energy_type == "sample-all") return get_normal_sampled_slope_sampled_intercept_sampled_sigma(predicted_cs, experimental_cs);
-          if (settings.energy_type == "marginalized-intercept") return get_normal_sampled_slope_marg_intercept_sampled_sigma(predicted_cs, experimental_cs);
-          if (settings.energy_type == "sample-weights") return get_normal_marg_slope_marg_intercept_sampled_sigma(predicted_cs, experimental_cs);
-          if (settings.energy_type == "mixture") return get_normal_mixture(predicted_cs, experimental_cs);
+          if (settings.energy_type == "sample-all") {
+               double energy = get_normal_sampled_slope_sampled_intercept_sampled_sigma(predicted_cs, experimental_cs);
+               energy += get_beta_prime_prior_sigma();
+               return energy;
+          }
+          if (settings.energy_type == "marginalized-intercept") {
+               double energy = get_normal_sampled_slope_marg_intercept_sampled_sigma(predicted_cs, experimental_cs);
+               energy += get_beta_prime_prior_sigma();
+               return energy;
+          }
+          if (settings.energy_type == "sample-weights") {
+               double energy = get_normal_marg_slope_marg_intercept_sampled_sigma(predicted_cs, experimental_cs);
+               energy += get_beta_prime_prior_sigma();
+               return energy;
+          }
           return 0.0;
      }
 
@@ -715,28 +677,7 @@ public:
      }
 
      void update_parameter() {
-          if (settings.energy_type == "mixture") {
-               // Get random parameter. Sample memberships half the time and parameters half the time.
-               unsigned int i = rand_int(0,7, this->random_number_engine);
-               if (i < 4) {
-                    // Get random atom type
-                    unsigned int j = rand_int(0,5, this->random_number_engine);
-                    if (i == 0) this->sample_parameter(this->weights[j], 0.25);
-                    else if (i == 1) this->sample_parameter(this->weights[j+6], 0.15);
-                    else if (i == 2) this->sample_parameter(this->slopes[j], 0.15);
-                    else if (i == 3) this->sample_parameter_add(this->intercepts[j], 0.25);
-               } else {
-                    // Get random residue
-                    unsigned int j = rand_int(1,this->chain->size(), this->random_number_engine);
-                    if (this->member[j]) {
-                        this->member[j] = false;
-                    } else {
-                        this->member[j] = true;
-                    }
-               }
-
-          }
-          else if (settings.energy_type == "sample-all") {
+          if (settings.energy_type == "sample-all") {
                // Get random parameter
                unsigned int i = rand_int(0,2, this->random_number_engine);
                // Get random atom type
@@ -759,9 +700,6 @@ public:
                this->sample_parameter(this->weights[j], 0.30);
           }
      }
-
-
-     //TODO everything will go badly with mixture model if all members are in either mixture 1 or 2.
 
 
      //! Calculate the energy and updates the precicted chemical shift table or parameters for the energy term.
@@ -792,12 +730,13 @@ public:
 
      //! Print info on sampled parameters.
      void print_parameters() {
-          if (this->n_print > 1000) {
+          if (this->n_print > 50000) {
                double cs1;
                double cs2;
                double chi_sq_first;
                double chi_sq_second;
                FPlist rmsd_first = empty_contribution;
+               FPlist slope_first = empty_contribution;
                FPlist rmsd_second = empty_contribution;
                // Holds which residues that makes a contribution to the chemical shift energy.
                std::vector<unsigned int> contributions(this->chain->size(),0);
@@ -838,13 +777,16 @@ public:
                         }
                     }
                     // Use MLE expression
-                    if (n_first > 0) {
-                         chi_sq_first = ysum2_first + ( xysum_first * (2*xsum_first * ysum_first - n_first* xysum_first) - xsum2_first * ysum_first * ysum_first ) / (n_first * xsum2_first - xsum_first*xsum_first);
-                         rmsd_first[j] = std::sqrt(chi_sq_first/n_first);
+                    if (n_first > 2) {
+                         chi_sq_first = (n_first * ysum2_first - ysum_first * ysum_first - this->slopes[j] * (n_first * xysum_first - xsum_first * ysum_first)) / n_first;
+                         //chi_sq_first = ysum2_first + ( xysum_first * (2*xsum_first * ysum_first - n_first* xysum_first) - xsum2_first * ysum_first * ysum_first ) / (n_first * xsum2_first - xsum_first*xsum_first);
+                         rmsd_first[j] = std::sqrt(chi_sq_first/(n_first-2));
+                         //slope_first[j] = (n_first * xysum_first - xsum_first*ysum_first)/
+                         //                 (n_first*xsum2_first - xsum_first*xsum_first);
                     }
                     if (n_second > 0) {
                          chi_sq_second = ysum2_second + ( xysum_second * (2*xsum_second * ysum_second - n_second* xysum_second) - xsum2_second * ysum_second * ysum_second ) / (n_second * xsum2_second - xsum_second*xsum_second);
-                         rmsd_second[j] = std::sqrt(chi_sq_second/n_second);
+                         rmsd_second[j] = std::sqrt(chi_sq_second/(n_second-2));
                     }
                }
                FPlist weights1;
@@ -853,32 +795,7 @@ public:
                     weights1.push_back(this->weights[i]);
                     weights2.push_back(std::sqrt(this->weights[i+6]*this->weights[i+6]+this->weights[i]*this->weights[i]));
                }
-               if (settings.energy_type == "mixture") {
-
-                    unsigned int n_first = 0;
-                    for (unsigned int i = 0; i < this->chain->size(); i++) {
-                         n_first += (unsigned int)this->member[i] * contributions[i];
-                    }
-
-                    std::cout << std::setprecision(3)
-                              << "\n# PROCS15 -- THREAD #" << this->thread_id
-                              << " -- WEIGHTS-1: " << weights1
-                              << " -- RMSD-1: " << rmsd_first
-                              << std::endl;
-                    std::cout << std::setprecision(3)
-                              << "\t\t -- WEIGHTS-2: " << weights2 
-                              << " -- RMSD-2: " << rmsd_second
-                              << std::endl;
-                    std::cout << std::setprecision(3)
-                              << "\t\t -- SLOPES: " << this->slopes
-                              << " -- INTERCEPTS: " << this->intercepts
-                              << std::endl;
-                    std::cout << "\t\t -- MEMBERSHIPS: " << n_first
-                              << "/" << std::accumulate(contributions.begin(),contributions.end(),0) - n_first
-                              << " -- " << this->member
-                              << std::endl;
-               }
-               else if (settings.energy_type == "sample-all") {
+               if (settings.energy_type == "sample-all") {
 
                     std::cout << std::setprecision(3)
                               << "\n# PROCS15 -- THREAD #" << this->thread_id
@@ -907,6 +824,7 @@ public:
                               << "\n# PROCS15 -- THREAD #" << this->thread_id
                               << " -- WEIGHTS: " << weights1
                               << " -- RMSD: " << rmsd_first
+                              << "\t\t -- SLOPES: " << this->slopes
                               << std::endl;
                }
 
@@ -951,6 +869,7 @@ public:
                          case 4: //!C
                               if (loaded_tables[2] == true){
                                    myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "C" << "\t" << "C" << "\t" << predicted_cs[i][4] << "\n";
+                                   atom_count+= 1;
                               }
                               break;
                          case 3: //!N
@@ -982,6 +901,91 @@ public:
           myfile.close();
      }
 
+     void write_nmr_star_format_full(phaistos::ChainFB& chain, std::string filename, std::vector<FPtable> &contributions){
+
+          int atom_count = 1;
+
+          std::ofstream myfile;
+          myfile.open(filename.c_str());
+          myfile << std::fixed;
+          myfile << std::setprecision(2);
+          myfile << "\t\t\t\t\tSUM \tHB1 \tHaB1\tHB2 \tHaB2\tRC  \tpre \tshld\tfol \twat\n";
+
+          for (unsigned int i = 0; i < contributions.size(); i++){
+               for (unsigned int j = 0; j < 6; j++){
+                    switch (j){
+                         case 1: //!CA
+                              if (loaded_tables[0] == true){
+                                   myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CA" << "\t" << "C" << "\t" << contributions[i].back()[j];
+                                   for (unsigned int k = 0; k < contributions[i].size()-1; k++) {
+                                        myfile << "\t" << contributions[i][k][j];
+                                   }
+                                   myfile << "\n";
+                                   atom_count+= 1;
+                              }
+
+                              break;
+                         case 5: //!CB
+                              if (chain[i].residue_type != GLY && loaded_tables[1] == true){
+                                   myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CB" << "\t" << "C" << "\t" << contributions[i].back()[j];
+                                   for (unsigned int k = 0; k < contributions[i].size()-1; k++) {
+                                        myfile << "\t" << contributions[i][k][j];
+                                   }
+                                   myfile << "\n";
+                                   atom_count+= 1;
+                              }
+                              break;
+                         case 4: //!C
+                              if (loaded_tables[2] == true){
+                                   myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "C" << "\t" << "C" << "\t" << contributions[i].back()[j];
+                                   for (unsigned int k = 0; k < contributions[i].size()-1; k++) {
+                                        myfile << "\t" << contributions[i][k][j];
+                                   }
+                                   atom_count+= 1;
+                                   myfile << "\n";
+                              }
+                              break;
+                         case 3: //!N
+                              if (loaded_tables[3] == true){
+                                   myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "N" << "\t" << "N" << "\t" << contributions[i].back()[j];
+                                   for (unsigned int k = 0; k < contributions[i].size()-1; k++) {
+                                        myfile << "\t" << contributions[i][k][j];
+                                   }
+                                   atom_count+= 1;
+                                   myfile << "\n";
+                              }
+                              break;
+                         case 2: //!HN
+                              if (chain[i].residue_type != PRO && loaded_tables[4] == true){
+                                   myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "H" << "\t" << "H" << "\t" << contributions[i].back()[j];
+                                   for (unsigned int k = 0; k < contributions[i].size()-1; k++) {
+                                        myfile << "\t" << contributions[i][k][j];
+                                   }
+                                   atom_count+= 1;
+                                   myfile << "\n";
+                              }
+                              break;
+                         case 0: //!HA
+                              if (loaded_tables[5] == true){
+                                   if (chain[i].residue_type == GLY) {
+                                        myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "HA2" << "\t" << "H" << "\t" << contributions[i].back()[j];
+                                   } else {
+                                        myfile << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "HA" << "\t" << "H" << "\t" << contributions[i].back()[j];
+                                   }
+                                   for (unsigned int k = 0; k < contributions[i].size()-1; k++) {
+                                        myfile << "\t" << contributions[i][k][j];
+                                   }
+                                   myfile << "\n";
+
+                                   atom_count++;
+                              }
+                              break;
+                    }
+               }
+          }
+          myfile.close();
+     }
+
      //! Accept last energy evaluation. Save predictions and model parameters.
      void accept() {
 
@@ -999,7 +1003,7 @@ public:
                this->predicted_chemical_shifts_previous = this->predicted_chemical_shifts;
           }
 
-          //print_parameters();
+          print_parameters();
 
      }
 
@@ -1025,7 +1029,7 @@ public:
                this->predicted_chemical_shifts = this->predicted_chemical_shifts_previous;
           }
 
-          //print_parameters();
+          print_parameters();
 
      }
 

@@ -3184,56 +3184,6 @@ public:
      }
 
 
-//     void NMR_STAR_format(phaistos::ChainFB& chain){
-//
-//          //! print NMR star format
-//
-//          int atom_count = 1;
-//
-//          for (unsigned int i = 0; i < chemical_shifts_table.size(); i++){
-//               for (unsigned int j = 0; j < 6; j++){
-//                    switch (j){
-//                         case 0: //!CA
-//                              if (loaded_tables[0] == true){
-//                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CA" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-//                                   atom_count+= 1;
-//                              }
-//
-//                              break;
-//                         case 1: //!CB
-//                              if (chain[i].residue_type != GLY && loaded_tables[1] == true){
-//                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "CB" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-//                                   atom_count+= 1;
-//                              }
-//                              break;
-//                         case 2: //!C
-//                              if (loaded_tables[2] == true){
-//                                   std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "C" << "\t" << "C" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-//                              }
-//                              break;
-//                         case 3: //!N
-//                              if (loaded_tables[3] == true){
-//                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "N" << "\t" << "N" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-//                              atom_count+= 1;
-//                              }
-//                              break;
-//                         case 4: //!HN
-//                              if (chain[i].residue_type != PRO && loaded_tables[4] == true){
-//                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "H" << "\t" << "H" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-//                              atom_count+= 1;
-//                              }
-//                              break;
-//                         case 5: //!HA
-//                              if (loaded_tables[5] == true){
-//                              std::cout << atom_count << "\t" << (i+1) << "\t" << chain[i].residue_type << "\t" << "HA" << "\t" << "H" << "\t" << chemical_shifts_table[i][transform_id(j)] << std::endl;
-//                              atom_count+= 1;
-//                              }
-//                              break;
-//                    }
-//               }
-//          }
-//     }
-
 
 }; // end class TermProCS15Cached
 

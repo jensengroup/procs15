@@ -302,7 +302,7 @@ public:
                     switch (donor->donor_type){
                          default: { //! DonorAmide DonorAmmonium DonorGuanidinium DonorImidazolium
                               const FPtype r_oh = ((*res1)[O]->position - donor->donor_hydrogen->position).norm();
-                              if (r_oh < hn_bond_cutoff) {
+                              if (r_oh < this->hn_hbond_cutoff) {
                                    const Vector_3D h_pos = donor->donor_hydrogen->position;
                                    const Vector_3D o_pos = (*res1)[O]->position;
                                    const Vector_3D c_pos = (*res1)[C]->position;
@@ -323,7 +323,7 @@ public:
 
                          case DonorAlphaHydrogen: {
                               const FPtype r_oha = ((*res1)[O]->position - donor->donor_hydrogen->position).norm();
-                              if (r_oha < ha_bond_cutoff){
+                              if (r_oha < this->ha_hbond_cutoff){
 
                                    const Vector_3D h_pos = donor->donor_hydrogen->position;
                                    const Vector_3D o_pos = (*res1)[O]->position;
@@ -364,7 +364,7 @@ public:
                     ++ring) {
 
                     FPtype dist_squared = (ring->ring_center - (*res1)[get_ha_atom_type(res1->residue_type)]->position).norm_squared();
-                    if (dist_squared < rc_cutoff2) {
+                    if (dist_squared < this->rc_cutoff*this->rc_cutoff) {
                          data_vector[0] += calc_aromatic_interaction((*res1)[get_ha_atom_type(res1->residue_type)]->position,
                                                                              (*ring),
                                                                              dist_squared);
@@ -372,7 +372,7 @@ public:
 
                     if (res1->has_atom(H)) {
                          FPtype dist_squared = (ring->ring_center - (*res1)[H]->position).norm_squared();
-                         if (dist_squared < rc_cutoff2) {
+                         if (dist_squared < this->rc_cutoff*this->rc_cutoff) {
                               data_vector[1] += calc_aromatic_interaction((*res1)[H]->position,
                                                                                       (*ring),
                                                                                       dist_squared);
@@ -423,6 +423,118 @@ public:
      }
 
 
+     std::vector<FPtable> predict_full(phaistos::ChainFB& chain) {
+
+          using namespace phaistos;
+          using namespace definitions;
+
+          FPlist primary_h_bond_corrections;
+          FPlist secondary_h_bond_corrections;
+          FPlist ring_current_corrections;
+          FPlist shieldings;
+
+          std::vector<FPtable> contributions(
+                  chain.size(),FPtable(10,empty_contribution));
+
+
+
+          for (ResidueIterator<ChainFB> res1(chain); !(res1).end(); ++res1) {
+
+               primary_h_bond_corrections = get_primary_h_bond_corrections(res1, chain);
+               secondary_h_bond_corrections = get_secondary_h_bond_corrections(res1, chain);
+               ring_current_corrections = get_ring_current_corrections(res1, chain);
+               shieldings = get_shieldings(res1);
+
+               if ((settings.load_hn) && (settings.use_water_correction == true) && (std::abs(primary_h_bond_corrections[4]) < 0.000001) && (res1->residue_type != PRO)) {
+                     contributions[res1->index][8][2] = -water_bonding_correction;
+               }
+
+               if (res1->terminal_status == NTERM) {
+                   if (settings.include_hn_secondary_hn_hbond) contributions[res1->index+1][2][2] = -secondary_h_bond_corrections[4];
+                   if (settings.include_n_secondary_hn_hbond)  contributions[res1->index+1][2][3] = -secondary_h_bond_corrections[3];
+
+                   if (settings.include_hn_secondary_ha_hbond) contributions[res1->index+1][3][2] = -secondary_h_bond_corrections[4+6];
+                   if (settings.include_n_secondary_ha_hbond)  contributions[res1->index+1][3][3] = -secondary_h_bond_corrections[3+6];
+                   continue;
+               }
+               if (res1->terminal_status == CTERM) {
+                   if (settings.include_co_primary_hn_hbond) contributions[res1->index-1][0][4] = -primary_h_bond_corrections[2];
+                   continue;
+               }
+               if (settings.include_ca_previous_residue_correction) contributions[res1->index][5][1] = shieldings[0];
+               if (settings.include_cb_previous_residue_correction) contributions[res1->index][5][5] = shieldings[1];
+               if (settings.include_co_previous_residue_correction) contributions[res1->index][5][4] = shieldings[2];
+               if (settings.include_hn_previous_residue_correction) contributions[res1->index][5][2] = shieldings[4];
+               if (settings.include_n_previous_residue_correction)  contributions[res1->index][5][3] = shieldings[3];
+               if (settings.include_ha_previous_residue_correction) contributions[res1->index][5][0] = shieldings[5];
+
+               contributions[res1->index][6][1] = shieldings[0+6];
+               contributions[res1->index][6][5] = shieldings[1+6];
+               contributions[res1->index][6][4] = shieldings[2+6];
+               contributions[res1->index][6][3] = shieldings[3+6];
+               contributions[res1->index][6][2] = shieldings[4+6];
+               contributions[res1->index][6][0] = shieldings[5+6];
+
+               if (settings.include_ca_following_residue_correction) contributions[res1->index][7][1] = shieldings[0+12];
+               if (settings.include_cb_following_residue_correction) contributions[res1->index][7][5] = shieldings[1+12];
+               if (settings.include_co_following_residue_correction) contributions[res1->index][7][4] = shieldings[2+12];
+               if (settings.include_hn_following_residue_correction) contributions[res1->index][7][2] = shieldings[4+12];
+               if (settings.include_n_following_residue_correction)  contributions[res1->index][7][3] = shieldings[3+12];
+               if (settings.include_ha_following_residue_correction) contributions[res1->index][7][0] = shieldings[5+12];
+
+               if (settings.include_ca_primary_hn_hbond) contributions[res1->index][0][1]   = -primary_h_bond_corrections[0];
+               if (settings.include_cb_primary_hn_hbond) contributions[res1->index][0][5]   = -primary_h_bond_corrections[1];
+               if (settings.include_hn_primary_hn_hbond) contributions[res1->index][0][2]   = -primary_h_bond_corrections[4];
+               if (settings.include_n_primary_hn_hbond)  contributions[res1->index][0][3]   = -primary_h_bond_corrections[3];
+               if (settings.include_co_primary_hn_hbond) contributions[res1->index-1][0][4] = -primary_h_bond_corrections[2];
+               if (settings.include_ha_primary_hn_hbond) contributions[res1->index][0][0]   = -primary_h_bond_corrections[5];
+
+               if (settings.include_ca_primary_ha_hbond) contributions[res1->index][1][1] = -primary_h_bond_corrections[0+6];
+               if (settings.include_cb_primary_ha_hbond) contributions[res1->index][1][5] = -primary_h_bond_corrections[1+6];
+               if (settings.include_co_primary_ha_hbond) contributions[res1->index][1][4] = -primary_h_bond_corrections[2+6];
+               if (settings.include_hn_primary_ha_hbond) contributions[res1->index][1][2] = -primary_h_bond_corrections[4+6];
+               if (settings.include_n_primary_ha_hbond)  contributions[res1->index][1][3] = -primary_h_bond_corrections[3+6];
+               if (settings.include_ha_primary_ha_hbond) contributions[res1->index][1][0] = -primary_h_bond_corrections[5+6];
+
+               if (settings.include_ca_secondary_hn_hbond) contributions[res1->index][2][1] = -secondary_h_bond_corrections[0];
+               if (settings.include_cb_secondary_hn_hbond) contributions[res1->index][2][5] = -secondary_h_bond_corrections[1];
+               if (settings.include_co_secondary_hn_hbond) contributions[res1->index][2][4] = -secondary_h_bond_corrections[2];
+               if (settings.include_hn_secondary_hn_hbond) contributions[res1->index+1][2][2] = -secondary_h_bond_corrections[4];
+               if (settings.include_n_secondary_hn_hbond)   contributions[res1->index+1][2][3] = -secondary_h_bond_corrections[3];
+               if (settings.include_ha_secondary_hn_hbond) contributions[res1->index][2][0] = -secondary_h_bond_corrections[5];
+
+               if (settings.include_ca_secondary_ha_hbond) contributions[res1->index][3][1] = -secondary_h_bond_corrections[0+6];
+               if (settings.include_cb_secondary_ha_hbond) contributions[res1->index][3][5] = -secondary_h_bond_corrections[1+6];
+               if (settings.include_co_secondary_ha_hbond) contributions[res1->index][3][4] = -secondary_h_bond_corrections[2+6];
+               if (settings.include_hn_secondary_ha_hbond) contributions[res1->index+1][3][2] = -secondary_h_bond_corrections[4+6];
+               if (settings.include_n_secondary_ha_hbond)  contributions[res1->index+1][3][3] = -secondary_h_bond_corrections[3+6];
+               if (settings.include_ha_secondary_ha_hbond) contributions[res1->index][3][0] = -secondary_h_bond_corrections[5+6];
+
+               if (settings.include_ha_rc) contributions[res1->index][4][0] = -ring_current_corrections[0];
+               if (settings.include_hn_rc) contributions[res1->index][4][2] = -ring_current_corrections[1];
+
+          }
+
+          // zero predictions at terminal residues
+          for (unsigned int i = 0; i < 9; i++) {
+               for (unsigned int j = 0; j < 6; j++) {
+                    contributions[0][i][j] = 0.0;
+                    contributions.back()[i][j] = 0.0;
+               }
+          }
+
+          for (ResidueIterator<ChainFB> res1(chain); !(res1).end(); ++res1) {
+               for (unsigned int i = 0; i < 9; i++) {
+                    for (unsigned int j = 0; j < 6; j++) {
+                         contributions[res1->index][9][j] += contributions[res1->index][i][j];
+                    }
+               }
+          }
+
+
+
+          return contributions;
+     }
 
 
 
@@ -456,8 +568,8 @@ public:
                    if (settings.include_hn_secondary_hn_hbond) chemical_shifts[res1->index+1][2] += secondary_h_bond_corrections[4];
                    if (settings.include_n_secondary_hn_hbond)   chemical_shifts[res1->index+1][3] += secondary_h_bond_corrections[3];
 
-               if (settings.include_hn_secondary_ha_hbond) chemical_shifts[res1->index+1][2] += secondary_h_bond_corrections[4+6];
-               if (settings.include_n_secondary_ha_hbond)  chemical_shifts[res1->index+1][3] += secondary_h_bond_corrections[3+6];
+                   if (settings.include_hn_secondary_ha_hbond) chemical_shifts[res1->index+1][2] += secondary_h_bond_corrections[4+6];
+                   if (settings.include_n_secondary_ha_hbond)  chemical_shifts[res1->index+1][3] += secondary_h_bond_corrections[3+6];
                    continue;
                }
                if (res1->terminal_status == CTERM) {
